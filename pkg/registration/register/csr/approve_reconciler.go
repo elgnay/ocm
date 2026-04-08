@@ -62,12 +62,13 @@ func (r *csrRenewalReconciler) Reconcile(ctx context.Context, csr csrInfo, appro
 	// Check whether current csr is a valid spoker cluster csr.
 	valid, _, commonName := validateCSR(logger, csr)
 	if !valid {
-		logger.V(4).Info("CSR was not recognized", "csrName", csr.name)
+		logger.V(0).Info("CSR was not recognized", "csrName", csr.name)
 		return reconcileStop, nil
 	}
 
 	// Check if user name in csr is the same as commonName field in csr request.
 	if csr.username != commonName {
+		logger.V(0).Info("csr.username != commonName", "csrName", csr.name, "csr.username", csr.username, "commonName", commonName)
 		return reconcileContinue, nil
 	}
 
@@ -77,7 +78,7 @@ func (r *csrRenewalReconciler) Reconcile(ctx context.Context, csr csrInfo, appro
 		return reconcileContinue, err
 	}
 	if !allowed {
-		logger.V(4).Info("Managed cluster csr cannot be auto approved due to subject access review not approved", "csrName", csr.name)
+		logger.V(0).Info("Managed cluster csr cannot be auto approved due to subject access review not approved", "csrName", csr.name)
 		return reconcileStop, nil
 	}
 
@@ -133,16 +134,18 @@ func (b *csrBootstrapReconciler) Reconcile(ctx context.Context, csr csrInfo, app
 func validateCSR(logger klog.Logger, csr csrInfo) (bool, string, string) {
 	spokeClusterName, existed := csr.labels[clusterv1.ClusterNameLabelKey]
 	if !existed {
+		logger.V(0).Info("has no ClusterNameLabelKey", "csrName", csr.name)
 		return false, "", ""
 	}
 
 	if csr.signerName != certificatesv1.KubeAPIServerClientSignerName {
+		logger.V(0).Info("csr.signerName != certificatesv1.KubeAPIServerClientSignerName", "csrName", csr.name)
 		return false, "", ""
 	}
 
 	block, _ := pem.Decode(csr.request)
 	if block == nil || block.Type != "CERTIFICATE REQUEST" {
-		logger.V(4).Info("CSR was not recognized: PEM block type is not CERTIFICATE REQUEST", "csrName", csr.name)
+		logger.V(0).Info("CSR was not recognized: PEM block type is not CERTIFICATE REQUEST", "csrName", csr.name)
 		return false, "", ""
 	}
 
@@ -157,15 +160,18 @@ func validateCSR(logger klog.Logger, csr csrInfo) (bool, string, string) {
 		requestingOrgs.Delete(user.ManagedClustersGroup)
 	}
 	if requestingOrgs.Len() != 1 {
+		logger.V(0).Info("requestingOrgs.Len() != 1", "csrName", csr.name)
 		return false, "", ""
 	}
 
 	expectedPerClusterOrg := fmt.Sprintf("%s%s", user.SubjectPrefix, spokeClusterName)
 	if !requestingOrgs.Has(expectedPerClusterOrg) {
+		logger.V(0).Info("!requestingOrgs.Has(expectedPerClusterOrg)", "csrName", csr.name, "expectedPerClusterOrg", expectedPerClusterOrg)
 		return false, "", ""
 	}
 
 	if !strings.HasPrefix(x509cr.Subject.CommonName, expectedPerClusterOrg) {
+		logger.V(0).Info("!strings.HasPrefix(x509cr.Subject.CommonName, expectedPerClusterOrg", "csrName", csr.name, "expectedPerClusterOrg", expectedPerClusterOrg)
 		return false, "", ""
 	}
 
